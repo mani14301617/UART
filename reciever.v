@@ -1,128 +1,97 @@
-module Reciever
-    #(parameter DATA_WIDTH=8,TIME=16)
-    (
-    input rx,s_tick,reset,
-    input clk,
-    output [DATA_WIDTH-1:0] rx_out,
-    output rx_done_tick
-    );
-    
-    localparam s_idle=0,s_start=1,s_data=2,s_stop=3;
-    reg [1:0] current_state,next_state;                             // to store the state in ehich the Reciever is present in
-    reg [DATA_WIDTH-1:0] data;                                      // ro Store the Data Elements
-    reg done;                                                       // to Store the time when the reciever is done getting the data
-    reg [$clog2(TIME):0] iterator_current,iterator_next;            // to keeo count of the number of clock ticks
-    reg [$clog2(DATA_WIDTH):0] bits_current,bits_next;              // to keep count of the number of bits that are recieved
-    
-    always @(posedge clk,negedge reset)
+module reciever #(parameter nbits=8,stpbits=2)(rx,rx_dout,rx_done,clk,reset);
+  input clk,reset,rx;
+  output reg [nbits-1:0]rx_dout;
+  output reg rx_done;
+ 
+  reg [1:0]state,next_state;
+  wire s_tick;
+ 
+  parameter final_time=9;
+  parameter nticks=16;
+  parameter s0=0,s1=1,s2=2,s3=3;//idle,start,data,stop
+ 
+  reg [4:0]count,timer;//keeping count of the ticks, count of final value
+  reg [4:0]n;//no. of bits traversed
+  
+  always@(posedge clk or negedge reset)
     begin
-        if(~reset)
+      if(~reset)
         begin
-            data <= 0;
-            done <= 0;
-            iterator_current <=0;
-            iterator_next <= 0;
-            current_state <= s_idle;
+          rx_dout<=0;
+          state<=s0;
+          count<=0;
+          n<=0;
+          next_state<=s0;
+          rx_done<=0;
         end
+      else
+          state<=next_state;
+    end
+  
+  always@(posedge s_tick)
+    count=count+1;
+ 
+  always@(*)
+    begin
+      //rx_done=0;
+      case(state)
+        s0:begin
+          rx_done=0;
+          if(rx==0)
+            begin
+              //rx_done=0;
+              next_state=s1;
+              count=0;
+            end
+        end
+        s1:
+          if(count==7)
+            begin
+              count=0;
+              n=0;
+              next_state=s2;
+            end
+        s2:
+          if(n==nbits) 
+            next_state=s3;
         else
+          begin
+            if(count==nticks)
+            begin
+              count=0;
+              rx_dout=(rx_dout << 1) | rx;;
+            
+                n=n+1;
+            end
+          end
+        s3:
+          if(count==nticks)
+            begin
+              count=0;
+              n=n+1;
+              if(n==(nbits+stpbits))begin
+                  rx_done=1;
+                  next_state=s0;
+                n=0;
+              end
+            end
+      endcase
+    end
+
+  always@(posedge clk or negedge reset)
+    begin
+      if(~reset)
+        timer=0;
+      else
         begin
-            current_state <=next_state;
-            iterator_current<=iterator_next;
-            bits_current<=bits_next;
+          if(s_tick)
+            timer=0;
+          else
+            timer=timer+1;
         end
     end
-    
-    always @(*)
-    begin
-        case(current_state)
-            s_idle:
-            begin
-                if(rx==0)
-                begin
-                    next_state = s_start;
-                    iterator_next = 0;
-                end
-                else
-                begin
-                    next_state = s_idle;
-                end
-            end
-            s_start:
-            begin
-                if(s_tick==1)
-                begin
-                    if(iterator_current==(TIME/2)-1)
-                    begin
-                        done = 0;
-                        iterator_next = 0;
-                        bits_next = 0;
-                        next_state = s_data;
-                    end
-                    else
-                    begin
-                        iterator_next = iterator_current + 1;
-                        next_state = s_start;
-                    end
-                end
-                else
-                begin
-                    next_state = s_start;
-                end
-            end
-            s_data:
-            begin
-                if(s_tick==1)
-                begin
-                    if(iterator_current == TIME-1)
-                    begin
-                        iterator_next =0;
-                        data[bits_current] = rx;
-                        if(bits_current==DATA_WIDTH-1)
-                        begin
-                            next_state = s_stop;
-                        end
-                        else
-                        begin
-                            bits_next = bits_current + 1;
-                            next_state = s_data;
-                        end
-                    end
-                    else
-                    begin
-                        iterator_next = iterator_current + 1;
-                        next_state = s_data;
-                    end
-                end
-                else
-                begin
-                    next_state= s_data;
-                end
-            end 
-            s_stop:
-            begin
-                if(s_tick==1)
-                begin
-                    if(iterator_next == TIME-1)
-                    begin
-                        done = 1;
-                        next_state = s_idle;
-                    end
-                    else
-                    begin
-                        iterator_next = iterator_current + 1;
-                        next_state = s_stop;
-                        
-                    end
-                end
-                else
-                begin
-                    next_state = s_stop;
-                end
-            end   
-        endcase
-    end
-    
-    assign rx_done_tick = done;
-    assign rx_out = data;
-    
-endmodule
+ 
+  //assign rx_done=(n==(nbits+stpbits));
+  assign s_tick=((timer==final_time));
+  
+endmodule 
