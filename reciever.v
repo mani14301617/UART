@@ -1,3 +1,4 @@
+`timescale 1ns / 1ps
 module reciever #(parameter nbits=8,stpbits=2)(rx,rx_dout,rx_done,clk,reset);
   input clk,reset,rx;
   output reg [nbits-1:0]rx_dout;
