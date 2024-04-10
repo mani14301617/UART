@@ -1,3 +1,4 @@
+`timescale 1ns / 1ps
 module transmitter#(parameter nbits=8,stpbits=2)(tx,clk,reset,tx_din,tx_start,tx_done);
   input clk,reset,tx_start;
   input [nbits-1:0]tx_din;
