@@ -1,141 +1,120 @@
-module Transmitter
-    #(parameter DATA_WIDTH=4,TIME=16)
-    (
-        input [DATA_WIDTH-1:0] din,
-        input clk,reset,
-        input s_tick,
-        input tx_start,
-        output tx_done_tick,
-        output tx
-    );
-    
-    reg [DATA_WIDTH-1:0] data;
-    reg tx_hold;
-    localparam s_idle=0,s_start=1,s_data=2,s_stop=3;
-    reg [1:0] current_state,next_state;
-    reg done;
-    reg [$clog2(TIME):0] iterator_current,iterator_next;
-    reg [$clog2(DATA_WIDTH):0] bits_current,bits_next;
-    
-    always @(posedge clk,negedge reset)
+module transmitter#(parameter nbits=8,stpbits=2)(tx,clk,reset,tx_din,tx_start,tx_done);
+  input clk,reset,tx_start;
+  input [nbits-1:0]tx_din;
+  output reg tx;
+  output reg tx_done;
+  
+  reg [1:0]state,next_state;
+  reg [4:0]tick_count,bit_count,time_count;
+  reg [nbits-1:0]b;
+  wire s_tick;
+  
+  parameter final_ticks=16;
+  parameter final_time=9;
+  parameter s0=0,s1=1,s2=2,s3=3;
+  
+  always@(posedge clk or negedge reset)
     begin
-        if(~reset)
+      if(~reset)
         begin
-            tx_hold<=0;
-            data <= 0;
-            current_state <= s_idle;
-            next_state <= s_idle;
-            done <= 0;
-            iterator_current<=0;
-            iterator_next<=0;
-            bits_current<=0;
-            bits_next<=0;
+          state<=s0;
+          next_state<=s0;
+          tx<=1;
+          bit_count<=0;
+          
         end
+      else
+        state<=next_state;
+    end
+  
+  always@(posedge s_tick)
+    begin
+        tick_count=tick_count+1;
+    end
+  
+  always@(posedge clk or negedge reset )
+    begin
+      if(~reset)
+          time_count<=0;
+      else
+        begin
+          if(s_tick)
+            time_count<=0;
+          else
+            time_count<=time_count+1;
+        end
+    end
+  
+  always@(*)
+    begin
+      //tx_done=0;
+      case(state)
+        s0:begin
+          tx_done=0;
+          if(tx_done)
+            next_state=s0;
+          
+         else if(tx_start)
+            begin
+              //tx_done=0;
+              next_state=s1;
+              time_count=0;
+              tick_count=0;
+              
+              //b=tx_din;
+            end
+        end
+        s1:
+          begin
+          b=tx_din;
+          tx=0;
+            if(tick_count==final_ticks)
+              begin
+                tick_count=0;
+                bit_count=0;
+                next_state=s2;
+              end
+          end
+        s2:
+          begin
+            tx=b[nbits-1];
+        if(bit_count==nbits)
+          next_state=s3;
         else
-        begin
-            current_state <= next_state;
-            iterator_current <= iterator_next;
-            bits_current <= bits_next;
-        end
+          begin
+             if(tick_count==final_ticks)
+              begin
+                tick_count=0;
+                b=b<<1;
+                bit_count=bit_count+1;
+              end
+            
+          end
+          end
+        s3:
+          begin
+          tx=1;
+        if(bit_count==(nbits+stpbits))
+          begin
+            tx_done=1;
+          next_state=s0;
+            
+          end
+        else
+          begin
+            if(tick_count==final_ticks)  
+             begin
+             tick_count=0;
+             bit_count=bit_count+1;
+             end
+          end
+          end
+          
+      endcase
     end
-    
-    always @(*)
-    begin
-        case(current_state)
-            s_idle:
-            begin
-                tx_hold=1;
-                done=0;
-                if(tx_start==1)
-                begin
-                    data = din;
-                    next_state = s_start;
-                end
-                else
-                begin
-                    next_state = s_idle;
-                end
-            end
-            s_start:
-            begin
-                tx_hold = 0;
-                if(s_tick==1)
-                begin
-                    if(iterator_current==TIME-1)
-                    begin
-                        next_state = s_data;
-                        iterator_next = 0;
-                        bits_next =0;
-                    end
-                    else
-                    begin
-                        iterator_next = iterator_current + 1;
-                        next_state = s_start;
-                    end
-                end
-                else
-                begin
-                    next_state = s_start;
-                end
-            end
-            s_data:
-            begin
-                tx_hold = data[0];
-                if(s_tick==1)
-                begin
-                    if(iterator_current==(TIME-1))
-                    begin
-                        iterator_next = 0;
-                        if(bits_current==DATA_WIDTH-1)
-                        begin
-                            next_state = s_stop;
-                            bits_next = 0;
-                            iterator_next =0;
-                        end
-                        else
-                        begin
-                            data = data>>1;
-                            next_state = s_data;
-                            bits_next = bits_current +1;
-                        end
-                    end
-                    else
-                    begin
-                        iterator_next = iterator_current + 1;
-                        next_state = s_data;
-                    end
-                end
-                else
-                begin
-                    next_state = s_data;
-                end
-            end
-            s_stop:
-            begin
-                tx_hold = 1;
-                if(s_tick == 1)
-                begin
-                    if(iterator_current == TIME-1)
-                    begin
-                        iterator_next = 0;
-                        bits_next = 0;
-                        next_state = s_idle;
-                        done = 1;
-                    end
-                    else
-                    begin
-                        next_state = s_stop;
-                        iterator_next=iterator_current + 1;
-                    end
-                end
-                else
-                begin
-                    next_state = s_stop;
-                end
-            end
-        endcase
-    end
-    
-    assign tx = tx_hold;
-    assign tx_done_tick = done;
-    endmodule
+  
+ // assign tx_done=(bit_count==(nbits+stpbits));
+  assign s_tick=(time_count==final_time);
+  
+endmodule
+
