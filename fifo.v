@@ -1,3 +1,4 @@
+`timescale 1ns / 1ps
 module fifo #(
     parameter DATA_WIDTH = 8, // Width of data in bits
     parameter FIFO_DEPTH = 7 // Number of entries in FIFO
