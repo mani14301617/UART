@@ -1,98 +1,114 @@
 `timescale 1ns / 1ps
-module reciever #(parameter nbits=8,stpbits=2)(rx,rx_dout,rx_done,clk,reset);
-  input clk,reset,rx;
-  output reg [nbits-1:0]rx_dout;
-  output reg rx_done;
- 
-  reg [1:0]state,next_state;
-  wire s_tick;
- 
-  parameter final_time=9;
-  parameter nticks=16;
-  parameter s0=0,s1=1,s2=2,s3=3;//idle,start,data,stop
- 
-  reg [4:0]count,timer;//keeping count of the ticks, count of final value
-  reg [4:0]n;//no. of bits traversed
-  
-  always@(posedge clk or negedge reset)
-    begin
-      if(~reset)
-        begin
-          rx_dout<=0;
-          state<=s0;
-          count<=0;
-          n<=0;
-          next_state<=s0;
-          rx_done<=0;
-        end
-      else
-          state<=next_state;
-    end
-  
-  always@(posedge s_tick)
-    count=count+1;
- 
-  always@(*)
-    begin
-      //rx_done=0;
-      case(state)
-        s0:begin
-          rx_done=0;
-          if(rx==0)
-            begin
-              //rx_done=0;
-              next_state=s1;
-              count=0;
-            end
-        end
-        s1:
-          if(count==7)
-            begin
-              count=0;
-              n=0;
-              next_state=s2;
-            end
-        s2:
-          if(n==nbits) 
-            next_state=s3;
-        else
-          begin
-            if(count==nticks)
-            begin
-              count=0;
-              rx_dout=(rx_dout << 1) | rx;;
-            
-                n=n+1;
-            end
-          end
-        s3:
-          if(count==nticks)
-            begin
-              count=0;
-              n=n+1;
-              if(n==(nbits+stpbits))begin
-                  rx_done=1;
-                  next_state=s0;
-                n=0;
-              end
-            end
-      endcase
-    end
+//////////////////////////////////////////////////////////////////////////////////
+// Company: 
+// Engineer: 
+// 
+// Create Date: 31.03.2024 
+// Design Name: 
+// Module Name: transmitter
+// Project Name: 
+// Target Devices: 
+// Tool Versions: 
+// Description: 
+// 
+// Dependencies: 
+// 
+// Revision:
+// Revision 0.01 - File Created
+// Additional Comments:
+// 
+//////////////////////////////////////////////////////////////////////////////////
 
-  always@(posedge clk or negedge reset)
+module reciever
+    #(parameter DBIT = 8,    // # data bits
+                SB_TICK = 16 // # stop bit ticks
+    )
+    (
+        input clk, reset_n,
+        input rx, s_tick,
+        output reg rx_done_tick,
+        output [DBIT - 1:0] rx_dout
+    );
+    
+    localparam  s0 = 0, s1 = 1,
+                s2 = 2, s3 = 3;
+                
+    reg [1:0] state_reg, state_next;
+    reg [3:0] s_reg, s_next;                // keep track of the baud rate ticks (16 total)
+    reg [$clog2(DBIT) - 1:0] n_reg, n_next; // keep track of the number of data bits recieved
+    reg [DBIT - 1:0] b_reg, b_next;         // stores the recieved data bits
+    
+    // State and other registers
+    always @(posedge clk, negedge reset_n)
     begin
-      if(~reset)
-        timer=0;
-      else
+        if (~reset_n)
         begin
-          if(s_tick)
-            timer=0;
-          else
-            timer=timer+1;
+            state_reg <= s0;
+            s_reg <= 0;
+            n_reg <= 0;
+            b_reg <= 0;
+        end
+        else
+        begin
+            state_reg <= state_next;
+            s_reg <= s_next;
+            n_reg <= n_next;
+            b_reg <= b_next;
         end
     end
- 
-  //assign rx_done=(n==(nbits+stpbits));
-  assign s_tick=((timer==final_time));
-  
-endmodule 
+    
+    // Next state logic
+    always @(*)
+    begin
+        state_next = state_reg;
+        s_next = s_reg;
+        n_next = n_reg;
+        b_next = b_reg;
+        rx_done_tick = 1'b0;
+        case (state_reg)
+            s0:                
+                if (~rx)
+                begin
+                    s_next = 0;
+                    state_next = s1;                        
+                end                 
+            s1:                
+                if (s_tick)
+                    if (s_reg == 7)
+                    begin
+                        s_next = 0;
+                        n_next = 0;
+                        state_next = s2;
+                    end
+                    else                        
+                        s_next = s_reg + 1;                                                                   
+            s2:
+                if (s_tick)
+                    if(s_reg == 15)
+                    begin
+                        s_next = 0;
+                        b_next = {rx, b_reg[DBIT - 1:1]}; // Right shift
+                        if (n_reg == (DBIT - 1))
+                            state_next = s3;
+                        else
+                            n_next = n_reg + 1;
+                    end
+                    else
+                        s_next = s_reg + 1;
+            s3:
+                if (s_tick)
+                    if(s_reg == (SB_TICK - 1))
+                    begin
+                        rx_done_tick = 1'b1;
+                        state_next = s0;
+                    end
+                    else
+                        s_next = s_reg + 1;
+            default:
+                state_next = s0;
+        endcase
+    end
+    
+    // output logic
+    assign rx_dout = b_reg;
+endmodule
