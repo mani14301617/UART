@@ -45,5 +45,6 @@ module timer_input
     always @(*)
         Q_next = done? 'b0: Q_reg + 1;
     
+
     
 endmodule
