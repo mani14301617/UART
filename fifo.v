@@ -1,4 +1,25 @@
 `timescale 1ns / 1ps
+//////////////////////////////////////////////////////////////////////////////////
+// Company: 
+// Engineer: 
+// 
+// Create Date: 31.03.2024 16:37:29
+// Design Name: 
+// Module Name: FIFO
+// Project Name: 
+// Target Devices: 
+// Tool Versions: 
+// Description: 
+// 
+// Dependencies: 
+// 
+// Revision:
+// Revision 0.01 - File Created
+// Additional Comments:
+// 
+//////////////////////////////////////////////////////////////////////////////////
+
+
 module fifo #(
     parameter DATA_WIDTH = 8, // Width of data in bits
     parameter FIFO_DEPTH = 7 // Number of entries in FIFO
@@ -8,21 +29,18 @@ module fifo #(
     input wire wr_en, // Write enable
     input wire rd_en, // Read enable
     input wire [DATA_WIDTH-1:0] wr_data, // Data to write
-    output reg [DATA_WIDTH-1:0] rd_data, // Data to read
+    output reg [DATA_WIDTH-1:0] dout, // Data to read
     output wire fifo_full, // FIFO full flag
     output wire fifo_empty // FIFO empty flag
 );
 
-// Internal parameters
+
 localparam ADDR_WIDTH = $clog2(FIFO_DEPTH);
 
-// FIFO storage
 reg [DATA_WIDTH-1:0] memory [0:FIFO_DEPTH-1];
 
-// Read and write pointers
 reg [ADDR_WIDTH-1:0] wr_ptr, rd_ptr;
 
-// FIFO count to keep track of the number of items
 reg [ADDR_WIDTH :0] fifo_count;
 
 assign fifo_full = (fifo_count == FIFO_DEPTH);
