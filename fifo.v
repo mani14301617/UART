@@ -29,7 +29,7 @@ module fifo #(
     input wire wr_en, // Write enable
     input wire rd_en, // Read enable
     input wire [DATA_WIDTH-1:0] wr_data, // Data to write
-    output reg [DATA_WIDTH-1:0] dout, // Data to read
+    output reg [DATA_WIDTH-1:0] rd_data, // Data to read
     output wire fifo_full, // FIFO full flag
     output wire fifo_empty // FIFO empty flag
 );
